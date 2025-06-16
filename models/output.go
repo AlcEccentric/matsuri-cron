@@ -18,8 +18,3 @@ type EventInfo struct {
 	EndAt             time.Time         `csv:"end_at"`
 	BoostAt           time.Time         `csv:"boost_at"`
 }
-
-type LatestEventBorderInfo struct {
-	EventId                  int               `json:"event_id"`
-	LastAggregatedAtByBorder map[int]time.Time `json:"last_aggregated_at_by_border"`
-}

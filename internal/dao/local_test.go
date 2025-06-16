@@ -2,7 +2,6 @@ package dao
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"testing"
@@ -13,7 +12,7 @@ import (
 )
 
 func createTempDir(t *testing.T) string {
-	dir, err := ioutil.TempDir("", "localdao_test")
+	dir, err := os.MkdirTemp("", "localdao_test")
 	assert.NoError(t, err)
 	return dir
 }
@@ -26,37 +25,34 @@ func writeJSONFile(t *testing.T, path string, v interface{}) {
 	assert.NoError(t, enc.Encode(v))
 }
 
-func TestGetMetadataInfo_FileNotExist(t *testing.T) {
+func TestGetLatestEventInfo_FileNotExist(t *testing.T) {
 	tmp := createTempDir(t)
 	defer os.RemoveAll(tmp)
 	dao := NewLocalDAO(tmp, "b", "e", "m")
-	info, err := dao.GetMetadataInfo()
+	info, err := dao.GetLatestEventInfo()
 	assert.NoError(t, err)
 	assert.Equal(t, 0, info.EventId)
-	assert.Empty(t, info.LastAggregatedAtByBorder)
 }
 
-func TestGetMetadataInfo_FileExists_Valid(t *testing.T) {
+func TestGetLatestEventInfo_FileExists_Valid(t *testing.T) {
 	tmp := createTempDir(t)
 	defer os.RemoveAll(tmp)
 	metadataDir := "m"
 	os.MkdirAll(filepath.Join(tmp, metadataDir), 0755)
-	expected := models.LatestEventBorderInfo{
+	expected := models.EventInfo{
 		EventId: 123,
-		LastAggregatedAtByBorder: map[int]time.Time{
-			100: time.Now(),
-		},
+		StartAt: time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC),
 	}
 	jsonPath := filepath.Join(tmp, metadataDir, "latest_event_border_info.json")
 	writeJSONFile(t, jsonPath, expected)
 	dao := NewLocalDAO(tmp, "b", "e", metadataDir)
-	info, err := dao.GetMetadataInfo()
+	info, err := dao.GetLatestEventInfo()
 	assert.NoError(t, err)
 	assert.Equal(t, expected.EventId, info.EventId)
-	assert.Equal(t, expected.LastAggregatedAtByBorder[100].Unix(), info.LastAggregatedAtByBorder[100].Unix())
+	assert.Equal(t, time.Date(2023, 10, 1, 0, 0, 0, 0, time.UTC), info.StartAt)
 }
 
-func TestGetMetadataInfo_FileExists_Invalid(t *testing.T) {
+func TestGetLatestEventInfo_FileExists_Invalid(t *testing.T) {
 	tmp := createTempDir(t)
 	defer os.RemoveAll(tmp)
 	metadataDir := "m"
@@ -64,7 +60,7 @@ func TestGetMetadataInfo_FileExists_Invalid(t *testing.T) {
 	jsonPath := filepath.Join(tmp, metadataDir, "latest_event_border_info.json")
 	os.WriteFile(jsonPath, []byte("not json"), 0644)
 	dao := NewLocalDAO(tmp, "b", "e", metadataDir)
-	_, err := dao.GetMetadataInfo()
+	_, err := dao.GetLatestEventInfo()
 	assert.Error(t, err)
 }
 
@@ -79,7 +75,7 @@ func TestSaveEventInfos_FirstTime(t *testing.T) {
 	err := dao.SaveEventInfos(eventInfos)
 	assert.NoError(t, err)
 	// Check file exists in the correct directory
-	_, err = os.Stat(filepath.Join(tmp, "e", EventInfoFileName))
+	_, err = os.Stat(filepath.Join(tmp, "e", EVENT_INFO_FILENAME))
 	assert.True(t, os.IsNotExist(err) == false)
 }
 
@@ -89,7 +85,7 @@ func TestSaveEventInfos_Filtered(t *testing.T) {
 	eventDir := "e"
 	metadataDir := "m"
 	os.MkdirAll(filepath.Join(tmp, metadataDir), 0755)
-	latest := models.LatestEventBorderInfo{EventId: 1}
+	latest := models.EventInfo{EventId: 1}
 	writeJSONFile(t, filepath.Join(tmp, metadataDir, "latest_event_border_info.json"), latest)
 	dao := NewLocalDAO(tmp, "b", eventDir, metadataDir)
 	eventInfos := []models.EventInfo{
@@ -138,11 +134,9 @@ func TestSaveBorderInfos_Filtered(t *testing.T) {
 	borderDir := "b"
 	metadataDir := "m"
 	os.MkdirAll(filepath.Join(tmp, metadataDir), 0755)
-	latest := models.LatestEventBorderInfo{
+	latest := models.EventInfo{
 		EventId: 1,
-		LastAggregatedAtByBorder: map[int]time.Time{
-			100: time.Now().Add(-time.Hour),
-		},
+		StartAt: time.Now().Add(-time.Hour),
 	}
 	writeJSONFile(t, filepath.Join(tmp, metadataDir, "latest_event_border_info.json"), latest)
 	dao := NewLocalDAO(tmp, borderDir, "e", metadataDir)

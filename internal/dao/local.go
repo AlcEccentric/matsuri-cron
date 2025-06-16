@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"fmt"
 	"os"
+	"path"
 
 	"github.com/alceccentric/matsurihi-cron/models"
 	"github.com/alceccentric/matsurihi-cron/utils"
@@ -13,48 +14,48 @@ import (
 )
 
 type LocalDAO struct {
-	outputPath      string
-	borderInfoDir   string
-	eventInfoDir    string
-	metadataInfoDir string
+	outputPath         string
+	borderInfoDir      string
+	eventInfoDir       string
+	latestEventInfoDir string
 }
 
 func NewLocalDAO(outputPath, borderInfoDir, eventInfoDir, metadataInfoDir string) *LocalDAO {
 	var err error
-	err = multierr.Append(err, utils.CreateDirectoryIfNotExists(outputPath+"/"+borderInfoDir))
-	err = multierr.Append(err, utils.CreateDirectoryIfNotExists(outputPath+"/"+eventInfoDir))
-	err = multierr.Append(err, utils.CreateDirectoryIfNotExists(outputPath+"/"+metadataInfoDir))
+	err = multierr.Append(err, utils.CreateDirectoryIfNotExists(path.Join(outputPath, borderInfoDir)))
+	err = multierr.Append(err, utils.CreateDirectoryIfNotExists(path.Join(outputPath, eventInfoDir)))
+	err = multierr.Append(err, utils.CreateDirectoryIfNotExists(path.Join(outputPath, metadataInfoDir)))
 
 	if err != nil {
 		logrus.WithError(err).Fatal("Failed to create output directories")
 	}
 
 	return &LocalDAO{
-		outputPath:      outputPath,
-		borderInfoDir:   borderInfoDir,
-		eventInfoDir:    eventInfoDir,
-		metadataInfoDir: metadataInfoDir,
+		outputPath:         outputPath,
+		borderInfoDir:      borderInfoDir,
+		eventInfoDir:       eventInfoDir,
+		latestEventInfoDir: metadataInfoDir,
 	}
 }
 
-func (u *LocalDAO) GetMetadataInfo() (models.LatestEventBorderInfo, error) {
-	path := u.outputPath + "/" + u.metadataInfoDir + "/latest_event_border_info.json"
-	if !utils.LocalFileExists(path) {
-		return models.LatestEventBorderInfo{}, nil
+func (u *LocalDAO) GetLatestEventInfo() (models.EventInfo, error) {
+	filepath := path.Join(u.outputPath, u.latestEventInfoDir, LATEST_EVENT_BORDER_INFO_FILE)
+	if !utils.LocalFileExists(filepath) {
+		return models.EventInfo{}, nil
 	}
-	var latestInfo models.LatestEventBorderInfo
-	if err := utils.ReadJSONFile(path, &latestInfo); err != nil {
-		return models.LatestEventBorderInfo{}, err
+	var latestInfo models.EventInfo
+	if err := utils.ReadJSONFile(filepath, &latestInfo); err != nil {
+		return models.EventInfo{}, err
 	}
 	return latestInfo, nil
 }
 func (u *LocalDAO) SaveEventInfos(eventInfos []models.EventInfo) error {
-	latestInfo, err := u.GetMetadataInfo()
+	latestInfo, err := u.GetLatestEventInfo()
 	if err != nil {
 		return err
 	}
-	filepath := u.outputPath + "/" + u.eventInfoDir + "/" + EventInfoFileName
-	isEmpty := latestInfo.EventId == 0 && len(latestInfo.LastAggregatedAtByBorder) == 0
+	filepath := path.Join(u.outputPath, u.eventInfoDir, EVENT_INFO_FILENAME)
+	isEmpty := latestInfo.EventId == 0
 	if isEmpty {
 		logrus.Infof("Saving %d event infos to %s for the first time", len(eventInfos), filepath)
 		return save(filepath, eventInfos, false)
@@ -66,26 +67,32 @@ func (u *LocalDAO) SaveEventInfos(eventInfos []models.EventInfo) error {
 }
 
 func (u *LocalDAO) SaveBorderInfos(borderInfos []models.BorderInfo) error {
-	latestInfo, err := u.GetMetadataInfo()
+	latestInfo, err := u.GetLatestEventInfo()
 	if err != nil {
 		return err
 	}
 	borderInfosByBorderGroupKey := groupByEventIdAndBorder(borderInfos)
-	isEmpty := latestInfo.EventId == 0 && len(latestInfo.LastAggregatedAtByBorder) == 0
+	isEmpty := latestInfo.EventId == 0
 	if isEmpty {
 		var err error
 		for key, infos := range borderInfosByBorderGroupKey {
-			filepath := u.outputPath + "/" + u.borderInfoDir + "/" + fmt.Sprintf(BorderInfoFileFormat, key.EventId, key.Border)
-			logrus.Infof("Saving %d border infos to %s for the first time", len(infos), filepath)
+			filepath := path.Join(u.outputPath, u.borderInfoDir, fmt.Sprintf(BORDER_INFO_FILENAME_FORMAT, key.EventId, key.Border))
+			logrus.Infof("Saving %d border infos for event ID %d and border %d to %s for the first time", len(infos), key.EventId, key.Border, filepath)
 			err = multierr.Append(err, save(filepath, infos, false))
 		}
 		return err
 	} else {
 		var err error
 		for key, infos := range borderInfosByBorderGroupKey {
-			filepath := u.outputPath + "/" + u.borderInfoDir + "/" + fmt.Sprintf(BorderInfoFileFormat, key.EventId, key.Border)
-			shouldAppend := utils.LocalFileExists(filepath)
-			err = multierr.Append(err, save(filepath, filterBorderInfos(infos, latestInfo), shouldAppend))
+			if key.EventId < latestInfo.EventId {
+				logrus.Warnf("Skipping border info for event ID %d, as it is older than the latest event ID %d", key.EventId, latestInfo.EventId)
+				continue
+			}
+			filepath := path.Join(u.outputPath, u.borderInfoDir, fmt.Sprintf(BORDER_INFO_FILENAME_FORMAT, key.EventId, key.Border))
+			// Always replace border info file (of each event and border) completely, which means it assumes the invoker fetch entire border logs for each event and border.
+			logrus.Infof("Saving %d border infos for event ID %d and border %d to %s, filtering based on latest event ID: %d", len(infos),
+				key.EventId, key.Border, filepath, latestInfo.EventId)
+			err = multierr.Append(err, save(filepath, infos, false))
 		}
 		return err
 	}

@@ -1,13 +1,17 @@
 package dao
 
 import (
+	"context"
+
 	"github.com/alceccentric/matsurihi-cron/models"
+	"github.com/aws/aws-sdk-go-v2/service/s3"
 	"github.com/sirupsen/logrus"
 )
 
 const (
-	EventInfoFileName    = "event_info_all.csv"
-	BorderInfoFileFormat = "border_info_%d_%d.csv"
+	LATEST_EVENT_BORDER_INFO_FILE = "latest_event_border_info.json"
+	EVENT_INFO_FILENAME           = "event_info_all.csv"
+	BORDER_INFO_FILENAME_FORMAT   = "border_info_%d_%d.csv"
 )
 
 type BorderGroupKey struct {
@@ -15,10 +19,15 @@ type BorderGroupKey struct {
 	Border  int
 }
 
+type S3Uploader interface {
+	GetObject(ctx context.Context, params *s3.GetObjectInput, optFns ...func(*s3.Options)) (*s3.GetObjectOutput, error)
+	PutObject(ctx context.Context, params *s3.PutObjectInput, optFns ...func(*s3.Options)) (*s3.PutObjectOutput, error)
+}
+
 type DAO interface {
 	SaveEventInfos(eventInfos []models.EventInfo) error
 	SaveBorderInfos(borderInfos []models.BorderInfo) error
-	GetMetadataInfo() (models.LatestEventBorderInfo, error)
+	GetLatestEventInfo() (models.EventInfo, error)
 }
 
 func groupByEventIdAndBorder(infos []models.BorderInfo) map[BorderGroupKey][]models.BorderInfo {
@@ -30,7 +39,7 @@ func groupByEventIdAndBorder(infos []models.BorderInfo) map[BorderGroupKey][]mod
 	return groups
 }
 
-func filterEventInfos(infos []models.EventInfo, latestInfo models.LatestEventBorderInfo) []models.EventInfo {
+func filterEventInfos(infos []models.EventInfo, latestInfo models.EventInfo) []models.EventInfo {
 	var filteredInfos []models.EventInfo
 	var filteredEventIds []int
 	logrus.Infof("Filtering %d event infos with latest event ID: %d", len(infos), latestInfo.EventId)
@@ -40,20 +49,6 @@ func filterEventInfos(infos []models.EventInfo, latestInfo models.LatestEventBor
 			filteredEventIds = append(filteredEventIds, info.EventId)
 		}
 	}
-	logrus.Infof("Filtered %d event infos with new event IDs: %v", len(filteredInfos), filteredEventIds)
-	return filteredInfos
-}
-
-func filterBorderInfos(infos []models.BorderInfo, latestInfo models.LatestEventBorderInfo) []models.BorderInfo {
-	var filteredInfos []models.BorderInfo
-	logrus.Infof("Filtering %d border infos with latest event ID: %d, latest aggregated at info: %v", len(infos), latestInfo.EventId,
-		latestInfo.LastAggregatedAtByBorder)
-	for _, info := range infos {
-		if info.EventId > latestInfo.EventId ||
-			(info.EventId == latestInfo.EventId && info.AggregatedAt.After(latestInfo.LastAggregatedAtByBorder[info.Border])) {
-			filteredInfos = append(filteredInfos, info)
-		}
-	}
-	logrus.Infof("Filtered %d border infos", len(filteredInfos))
+	logrus.Infof("Retained %d event infos with new event IDs: %v", len(filteredInfos), filteredEventIds)
 	return filteredInfos
 }
