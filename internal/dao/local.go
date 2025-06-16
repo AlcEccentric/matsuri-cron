@@ -1,13 +1,12 @@
 package dao
 
 import (
-	"encoding/csv"
 	"fmt"
 	"os"
 	"path"
 
+	"github.com/alceccentric/matsurihi-cron/internal/utils"
 	"github.com/alceccentric/matsurihi-cron/models"
-	"github.com/alceccentric/matsurihi-cron/utils"
 	"github.com/gocarina/gocsv"
 	"github.com/sirupsen/logrus"
 	"go.uber.org/multierr"
@@ -50,65 +49,46 @@ func (u *LocalDAO) GetLatestEventInfo() (models.EventInfo, error) {
 	return latestInfo, nil
 }
 func (u *LocalDAO) SaveEventInfos(eventInfos []models.EventInfo) error {
-	latestInfo, err := u.GetLatestEventInfo()
-	if err != nil {
-		return err
-	}
 	filepath := path.Join(u.outputPath, u.eventInfoDir, EVENT_INFO_FILENAME)
-	isEmpty := latestInfo.EventId == 0
-	if isEmpty {
-		logrus.Infof("Saving %d event infos to %s for the first time", len(eventInfos), filepath)
-		return save(filepath, eventInfos, false)
-	} else {
-		logrus.Infof("Saving %d event infos to %s, filtering based on latest event ID: %d", len(eventInfos), filepath, latestInfo.EventId)
-		return save(filepath, filterEventInfos(eventInfos, latestInfo), true)
-	}
+	logrus.Infof("Saving %d event infos to %s for the first time", len(eventInfos), filepath)
+	return saveCSV(filepath, eventInfos)
 
 }
 
 func (u *LocalDAO) SaveBorderInfos(borderInfos []models.BorderInfo) error {
-	latestInfo, err := u.GetLatestEventInfo()
-	if err != nil {
-		return err
-	}
 	borderInfosByBorderGroupKey := groupByEventIdAndBorder(borderInfos)
-	isEmpty := latestInfo.EventId == 0
-	if isEmpty {
-		var err error
-		for key, infos := range borderInfosByBorderGroupKey {
-			filepath := path.Join(u.outputPath, u.borderInfoDir, fmt.Sprintf(BORDER_INFO_FILENAME_FORMAT, key.EventId, key.Border))
-			logrus.Infof("Saving %d border infos for event ID %d and border %d to %s for the first time", len(infos), key.EventId, key.Border, filepath)
-			err = multierr.Append(err, save(filepath, infos, false))
-		}
-		return err
-	} else {
-		var err error
-		for key, infos := range borderInfosByBorderGroupKey {
-			if key.EventId < latestInfo.EventId {
-				logrus.Warnf("Skipping border info for event ID %d, as it is older than the latest event ID %d", key.EventId, latestInfo.EventId)
-				continue
-			}
-			filepath := path.Join(u.outputPath, u.borderInfoDir, fmt.Sprintf(BORDER_INFO_FILENAME_FORMAT, key.EventId, key.Border))
-			// Always replace border info file (of each event and border) completely, which means it assumes the invoker fetch entire border logs for each event and border.
-			logrus.Infof("Saving %d border infos for event ID %d and border %d to %s, filtering based on latest event ID: %d", len(infos),
-				key.EventId, key.Border, filepath, latestInfo.EventId)
-			err = multierr.Append(err, save(filepath, infos, false))
-		}
-		return err
+	var err error
+	for key, infos := range borderInfosByBorderGroupKey {
+		filepath := path.Join(u.outputPath, u.borderInfoDir, fmt.Sprintf(BORDER_INFO_FILENAME_FORMAT, key.EventId, key.Border))
+		logrus.Infof("Saving %d border infos for event ID %d and border %d to %s", len(infos), key.EventId, key.Border, filepath)
+		err = multierr.Append(err, saveCSV(filepath, infos))
 	}
+	return err
 }
 
-func save[T any](path string, infos []T, append bool) error {
+func (u *LocalDAO) SaveLatestEventInfo(info models.EventInfo) error {
+	filepath := path.Join(u.outputPath, u.eventInfoDir, EVENT_INFO_FILENAME)
+	logrus.Infof("Saving latest event info %v to %s", info, filepath)
+	return saveJson(filepath, info, false)
+}
+
+func saveJson(path string, data interface{}, pretty bool) error {
+	file, err := os.Create(path)
+	if err != nil {
+		return fmt.Errorf("failed to create file %s: %w", path, err)
+	}
+	defer file.Close()
+	if err := utils.WriteJSONFile(file, data, pretty); err != nil {
+		return fmt.Errorf("failed to write JSON to file %s: %w", path, err)
+	}
+	return nil
+}
+
+func saveCSV[T any](path string, infos []T) error {
 	var file *os.File
 	var err error
 
-	flag := os.O_CREATE | os.O_WRONLY
-	if append {
-		flag |= os.O_APPEND
-	} else {
-		flag |= os.O_TRUNC
-	}
-
+	flag := os.O_CREATE | os.O_WRONLY | os.O_TRUNC
 	if len(infos) == 0 {
 		logrus.Warnf("No data to save to %s", path)
 		return nil
@@ -119,17 +99,8 @@ func save[T any](path string, infos []T, append bool) error {
 	}
 	defer file.Close()
 
-	writeHeaders := !append || !utils.LocalFileExists(path)
-	if writeHeaders {
-		if err = gocsv.MarshalFile(infos, file); err != nil {
-			return err
-		}
-	} else {
-		csvWriter := csv.NewWriter(file)
-		defer csvWriter.Flush()
-		if err = gocsv.MarshalCSVWithoutHeaders(infos, csvWriter); err != nil {
-			return err
-		}
+	if err = gocsv.MarshalFile(infos, file); err != nil {
+		return err
 	}
 
 	return nil

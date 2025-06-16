@@ -8,8 +8,8 @@ import (
 	"strconv"
 	"time"
 
+	utils "github.com/alceccentric/matsurihi-cron/internal/utils"
 	models "github.com/alceccentric/matsurihi-cron/models"
-	utils "github.com/alceccentric/matsurihi-cron/utils"
 
 	resty "github.com/go-resty/resty/v2"
 	"github.com/sirupsen/logrus"
@@ -18,6 +18,19 @@ import (
 const (
 	BASE_URL_V2 = "https://api.matsurihi.me/api/mltd/v2"
 )
+
+// Interface for the Matsurihi.me client to interact with the MLTD API.
+type MatsuriClient interface {
+	GetEvents(options *models.EventsOptions) ([]models.Event, error)
+	GetEvent(eventId int) (models.Event, error)
+	GetEventRankingBorders(eventId int) (models.EventRankingBorders, error)
+	GetEventRankingLogs(
+		eventId int,
+		eventType models.EventRankingType,
+		rankingBorder int,
+		options *models.EventRankingLogsOptions,
+	) ([]models.EventRankingLog, error)
+}
 
 type MatsurihiMeClient struct {
 	baseUrl    string

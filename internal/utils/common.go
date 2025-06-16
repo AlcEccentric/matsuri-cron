@@ -55,3 +55,32 @@ func ReadJSONFile(path string, v interface{}) error {
 	}
 	return nil
 }
+
+func WriteJSONFile(file *os.File, data interface{}, pretty bool) error {
+	encoder := json.NewEncoder(file)
+	if pretty {
+		encoder.SetIndent("", "  ") // Pretty print with indentation
+	}
+
+	if err := encoder.Encode(data); err != nil {
+		return fmt.Errorf("failed to write JSON to file: %w", err)
+	}
+	return nil
+}
+
+// Generic function to check if slice1 is a subset of slice2
+func IsSubset[T comparable](slice1, slice2 []T) bool {
+	elementMap := make(map[T]struct{})
+
+	for _, v := range slice2 {
+		elementMap[v] = struct{}{}
+	}
+
+	for _, v := range slice1 {
+		if _, exists := elementMap[v]; !exists {
+			return false
+		}
+	}
+
+	return true
+}
