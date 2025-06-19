@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"log"
 	"os"
@@ -14,6 +15,7 @@ import (
 	"github.com/aws/aws-sdk-go-v2/config"
 	"github.com/aws/aws-sdk-go-v2/credentials"
 	"github.com/aws/aws-sdk-go-v2/service/s3"
+	"github.com/aws/smithy-go"
 	"github.com/gocarina/gocsv"
 	"github.com/joho/godotenv"
 	"github.com/sirupsen/logrus"
@@ -56,6 +58,10 @@ func (u *R2DAO) GetLatestEventInfo() (models.EventInfo, error) {
 	})
 
 	if err != nil {
+		var apiErr smithy.APIError
+		if errors.As(err, &apiErr) && apiErr.ErrorCode() == "NoSuchKey" {
+			return models.EventInfo{}, nil
+		}
 		return models.EventInfo{}, err
 	}
 	defer resp.Body.Close()
