@@ -12,6 +12,7 @@ type BorderInfo struct {
 
 type EventInfo struct {
 	EventId           int               `csv:"event_id"`
+	EventName         string            `csv:"name"`
 	EventType         EventType         `csv:"event_type"`
 	InternalEventType InternalEventType `csv:"internal_event_type"`
 	StartAt           time.Time         `csv:"start_at"`

@@ -67,7 +67,7 @@ func (u *LocalDAO) SaveBorderInfos(borderInfos []models.BorderInfo) error {
 }
 
 func (u *LocalDAO) SaveLatestEventInfo(info models.EventInfo) error {
-	filepath := path.Join(u.outputPath, u.eventInfoDir, EVENT_INFO_FILENAME)
+	filepath := path.Join(u.outputPath, u.latestEventInfoDir, LATEST_EVENT_BORDER_INFO_FILE)
 	logrus.Infof("Saving latest event info %v to %s", info, filepath)
 	return saveJson(filepath, info, false)
 }

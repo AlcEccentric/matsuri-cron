@@ -117,7 +117,7 @@ func TestSaveLatestEventInfo(t *testing.T) {
 	assert.NoError(t, err)
 
 	// Check file exists and content is correct
-	filePath := filepath.Join(tmp, "e", EVENT_INFO_FILENAME)
+	filePath := filepath.Join(tmp, "m", LATEST_EVENT_BORDER_INFO_FILE)
 	data, err := os.ReadFile(filePath)
 	assert.NoError(t, err)
 

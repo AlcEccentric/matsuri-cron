@@ -117,8 +117,21 @@ func TestRunSync_NoNewEvents(t *testing.T) {
 	mockClient := new(MockMatsuriClient)
 	mockClient.On("GetEvents", mock.Anything).Return([]models.Event{}, nil).Once()
 
+	// Border info should still be collected for latest event id (1)
+	mockClient.On("GetEventRankingLogs", 1, models.EventPoint, 100, (*models.EventRankingLogsOptions)(nil)).Return([]models.EventRankingLog{}, nil).Once()
+	mockClient.On("GetEventRankingLogs", 1, models.EventPoint, 2500, (*models.EventRankingLogsOptions)(nil)).Return([]models.EventRankingLog{}, nil).Once()
+
+	// SaveBorderInfos and SaveLatestEventInfo should be called
+	mockDao.On("SaveBorderInfos", mock.Anything).Return(nil).Once()
+	mockDao.On("SaveLatestEventInfo", mock.Anything).Return(nil).Once()
+
+	// SaveEventInfos should NOT be called, but if you want to enforce this:
+	// mockDao.AssertNotCalled(t, "SaveEventInfos", mock.Anything)
+
 	err := RunSync(mockClient, mockDao)
 	assert.NoError(t, err)
+	mockDao.AssertExpectations(t)
+	mockClient.AssertExpectations(t)
 }
 
 func TestRunSync_SaveEventInfosError(t *testing.T) {
@@ -236,6 +249,6 @@ func TestCollectBorderInfos_HandlesGetEventRankingLogsError(t *testing.T) {
 	mockClient := new(MockMatsuriClient)
 	mockClient.On("GetEventRankingLogs", 1, models.EventPoint, 100, (*models.EventRankingLogsOptions)(nil)).Return([]models.EventRankingLog{}, errors.New("fail")).Once()
 	mockClient.On("GetEventRankingLogs", 1, models.EventPoint, 2500, (*models.EventRankingLogsOptions)(nil)).Return([]models.EventRankingLog{}, nil).Once()
-	infos := collectBorderInfos(mockClient, []int{1}, []int{100, 2500}, models.EventPoint)
+	infos := collectBorderInfos(mockClient, map[int]struct{}{1: struct{}{}}, []int{100, 2500}, models.EventPoint)
 	assert.Len(t, infos, 0)
 }

@@ -33,20 +33,21 @@ func RunSync(client matsuri.MatsuriClient, dao dao.DAO) error {
 	logrus.Infof("Got %d events before filtering", len(events))
 
 	eventInfos := collectEventInfos(client, events, latest.EventId, SURPPORTED_BORDERS)
-	if len(eventInfos) == 0 {
-		logrus.Info("No new events to process.")
-		return nil
-	}
-	logrus.Infof("Got %d events to process", len(eventInfos))
-
-	if err := dao.SaveEventInfos(eventInfos); err != nil {
-		return errors.New("save event infos: " + err.Error())
+	if len(eventInfos) > 0 {
+		logrus.Infof("Got %d events to process", len(eventInfos))
+		if err := dao.SaveEventInfos(eventInfos); err != nil {
+			return errors.New("save event infos: " + err.Error())
+		}
 	}
 
-	eventIds := make([]int, 0, len(eventInfos)+1)
-	eventIds = append(eventIds, latest.EventId)
+	eventIds := make(map[int]struct{})
+	if latest.EventId > 0 {
+		// Although eventInfos only contains events with IDs greater than latest.EventId,
+		// we still wanna fetch border infos for the last latest event
+		eventIds[latest.EventId] = struct{}{}
+	}
 	for _, info := range eventInfos {
-		eventIds = append(eventIds, info.EventId)
+		eventIds[info.EventId] = struct{}{}
 		if info.EventId > latest.EventId {
 			latest = info
 		}
@@ -56,6 +57,7 @@ func RunSync(client matsuri.MatsuriClient, dao dao.DAO) error {
 	if err := dao.SaveBorderInfos(borderInfos); err != nil {
 		return errors.New("save border infos: " + err.Error())
 	}
+	// TODO: Define a new struct for latest event info to include name but not type
 	if err := dao.SaveLatestEventInfo(latest); err != nil {
 		return errors.New("save latest event info: " + err.Error())
 	}
@@ -65,14 +67,15 @@ func RunSync(client matsuri.MatsuriClient, dao dao.DAO) error {
 
 func collectBorderInfos(
 	matsuriClient matsuri.MatsuriClient,
-	eventIds []int,
+	eventIds map[int]struct{},
 	supportedBorders []int,
 	supportedBorderType models.EventRankingType,
 ) []models.BorderInfo {
 	var borderInfos []models.BorderInfo
 
-	for _, eventId := range eventIds {
+	for eventId := range eventIds {
 		for _, border := range supportedBorders {
+			logrus.Infof("Collecting border infos for event %d with border: %d", eventId, border)
 			rankingLogs, err := matsuriClient.GetEventRankingLogs(
 				eventId,
 				supportedBorderType,
@@ -96,6 +99,11 @@ func collectBorderInfos(
 					borderInfos = append(borderInfos, borderInfo)
 				}
 			}
+			logCnt := 0
+			if len(rankingLogs) > 0 {
+				logCnt = len(rankingLogs[0].Data)
+			}
+			logrus.Infof("Collected %d border infos for event %d with border: %d", logCnt, eventId, border)
 		}
 	}
 	return borderInfos
@@ -125,6 +133,7 @@ func collectEventInfos(
 			eventInfo := models.EventInfo{
 				EventId:           event.Id,
 				EventType:         models.EventType(event.Type),
+				EventName:         event.Name,
 				InternalEventType: models.ToInternalEventType(event),
 				StartAt:           event.Schedule.BeginAt,
 				EndAt:             event.Schedule.EndAt,
