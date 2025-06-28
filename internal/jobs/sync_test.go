@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/alceccentric/matsurihi-cron/models"
-	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -332,14 +331,6 @@ func TestIsSupportedAnniversaryEvent_WrongType(t *testing.T) {
 }
 
 func TestIsSupportedAnniversaryEvent_WrongIdolCount(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("Expected fatal for wrong idol count")
-		}
-	}()
-	// Set logrus to panic on Fatal
-	logrus.StandardLogger().ExitFunc = func(int) { panic("fatal called") }
-
 	event := models.Event{
 		Id:   1,
 		Type: int(models.Anniversary),
@@ -347,18 +338,11 @@ func TestIsSupportedAnniversaryEvent_WrongIdolCount(t *testing.T) {
 	borders := models.EventRankingBorders{
 		IdolPoint: make([]models.IdolPointBorders, 51), // not 52
 	}
-	isSupportedAnniversaryEvent(event, borders, []int{100, 1000})
+	result := isSupportedAnniversaryEvent(event, borders, []int{100, 1000})
+	assert.False(t, result)
 }
 
 func TestIsSupportedAnniversaryEvent_WrongSupportedCount(t *testing.T) {
-	defer func() {
-		if r := recover(); r == nil {
-			t.Errorf("Expected fatal for wrong supported idol count")
-		}
-	}()
-	// Set logrus to panic on Fatal
-	logrus.StandardLogger().ExitFunc = func(int) { panic("fatal called") }
-
 	event := models.Event{
 		Id:   1,
 		Type: int(models.Anniversary),
@@ -378,5 +362,6 @@ func TestIsSupportedAnniversaryEvent_WrongSupportedCount(t *testing.T) {
 		IdolId:  52,
 		Borders: []int{100},
 	}
-	isSupportedAnniversaryEvent(event, borders, []int{100, 1000})
+	result := isSupportedAnniversaryEvent(event, borders, []int{100, 1000})
+	assert.False(t, result)
 }

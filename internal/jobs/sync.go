@@ -195,7 +195,9 @@ func isSupportedAnniversaryEvent(event models.Event, borders models.EventRanking
 	}
 
 	if len(borders.IdolPoint) != 52 {
-		logrus.Fatalf("Event %d has %d idol points, expected 52", event.Id, len(borders.IdolPoint))
+		logrus.Debugf("isSupportedAnniversaryEvent: Event %v Borders: %v", event, borders)
+		logrus.Warnf("Event %d has %d idol points, expected 52", event.Id, len(borders.IdolPoint))
+		return false
 	}
 
 	counter := 0
@@ -205,7 +207,8 @@ func isSupportedAnniversaryEvent(event models.Event, borders models.EventRanking
 		}
 	}
 	if counter != 52 {
-		logrus.Fatalf("Event %d has %d idols with supported anniversary borders, expected 52", event.Id, counter)
+		logrus.Warnf("Event %d has %d idols with supported anniversary borders, expected 52", event.Id, counter)
+		return false
 	}
 
 	return true
