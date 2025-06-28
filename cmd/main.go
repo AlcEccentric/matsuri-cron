@@ -25,7 +25,7 @@ func main() {
 	case "local":
 		borderDAO = dao.NewLocalDAO("data", "border_info", "evnent_info", "metadata")
 	case "r2":
-		borderDAO = dao.NewR2DAO("mltd-border-predict", "normal/border_info", "normal/event_info", "normal/metadata")
+		borderDAO = dao.NewR2DAO("mltd-border-predict", "border_info", "event_info", "metadata")
 	default:
 		logrus.Fatalf("Unknown mode: %s", *mode)
 	}

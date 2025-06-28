@@ -163,8 +163,8 @@ func TestSaveBorderInfos_Success(t *testing.T) {
 	mockS3.On("PutObject", mock.Anything, mock.Anything).Return(&s3.PutObjectOutput{}, nil).Times(2)
 
 	borderInfos := []models.BorderInfo{
-		{EventId: 1, Border: 100},
-		{EventId: 1, Border: 200},
+		{EventId: 1, IdolId: 0, Border: 100},
+		{EventId: 1, IdolId: 0, Border: 200},
 	}
 
 	err := dao.SaveBorderInfos(borderInfos)

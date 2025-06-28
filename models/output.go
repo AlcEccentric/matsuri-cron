@@ -4,6 +4,7 @@ import "time"
 
 type BorderInfo struct {
 	EventId      int              `csv:"event_id"`
+	IdolId       int              `csv:"idol_id"`
 	Border       int              `csv:"border"`
 	RankingType  EventRankingType `csv:"ranking_type"`
 	AggregatedAt time.Time        `csv:"aggregated_at"`

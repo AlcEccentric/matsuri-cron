@@ -170,4 +170,5 @@ const (
 	highScore2     EventRankingType = "highScore2"
 	HighScoreTotal EventRankingType = "highScoreTotal"
 	LoungePoint    EventRankingType = "loungePoint"
+	IdolPoint      EventRankingType = "idolPoint"
 )

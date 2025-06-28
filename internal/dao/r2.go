@@ -87,7 +87,7 @@ func (u *R2DAO) SaveBorderInfos(borderInfos []models.BorderInfo) error {
 	borderInfosByBorderGroupKey := groupByEventIdAndBorder(borderInfos)
 	var err error
 	for group, infos := range borderInfosByBorderGroupKey {
-		key := path.Join(u.borderInfoPrefix, fmt.Sprintf(BORDER_INFO_FILENAME_FORMAT, group.EventId, group.Border))
+		key := path.Join(u.borderInfoPrefix, fmt.Sprintf(BORDER_INFO_FILENAME_FORMAT, group.EventId, group.IdolId, group.Border))
 		err = multierr.Append(err, writeCSVToR2(u.s3, u.bucketName, key, infos))
 	}
 	return err

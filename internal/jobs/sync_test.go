@@ -54,6 +54,11 @@ func (m *MockMatsuriClient) GetEventRankingLogs(eventId int, eventType models.Ev
 	return args.Get(0).([]models.EventRankingLog), args.Error(1)
 }
 
+func (m *MockMatsuriClient) GetEventIdolRankingLogs(eventId int, rankingBorder int, options *models.EventRankingLogsOptions) (map[int][]models.EventRankingLog, error) {
+	args := m.Called(eventId, rankingBorder, options)
+	return args.Get(0).(map[int][]models.EventRankingLog), args.Error(1)
+}
+
 // --- Tests ---
 
 func TestRunSync_HappyPath(t *testing.T) {
@@ -231,7 +236,7 @@ func TestCollectEventInfos_SkipOldAndAnniversary(t *testing.T) {
 	}
 	// Make event 2 fail as well, so both are skipped
 	mockClient.On("GetEventRankingBorders", 2).Return(models.EventRankingBorders{}, errors.New("fail")).Once()
-	infos := collectEventInfos(mockClient, events, 1, []int{100, 2500})
+	infos := collectEventInfos(mockClient, events, 1)
 	assert.Len(t, infos, 0)
 }
 
@@ -241,7 +246,7 @@ func TestCollectEventInfos_HandlesGetEventRankingBordersError(t *testing.T) {
 		{Id: 2, Type: int(models.Theater), Name: "Theater"},
 	}
 	mockClient.On("GetEventRankingBorders", 2).Return(models.EventRankingBorders{}, errors.New("fail")).Once()
-	infos := collectEventInfos(mockClient, events, 1, []int{100, 2500})
+	infos := collectEventInfos(mockClient, events, 1)
 	assert.Len(t, infos, 0)
 }
 
@@ -249,6 +254,6 @@ func TestCollectBorderInfos_HandlesGetEventRankingLogsError(t *testing.T) {
 	mockClient := new(MockMatsuriClient)
 	mockClient.On("GetEventRankingLogs", 1, models.EventPoint, 100, (*models.EventRankingLogsOptions)(nil)).Return([]models.EventRankingLog{}, errors.New("fail")).Once()
 	mockClient.On("GetEventRankingLogs", 1, models.EventPoint, 2500, (*models.EventRankingLogsOptions)(nil)).Return([]models.EventRankingLog{}, nil).Once()
-	infos := collectBorderInfos(mockClient, map[int]struct{}{1: struct{}{}}, []int{100, 2500}, models.EventPoint)
+	infos := collectBorderInfos(mockClient, map[int]struct{}{1: struct{}{}}, map[int]models.EventInfo{1: models.EventInfo{EventId: 1}})
 	assert.Len(t, infos, 0)
 }

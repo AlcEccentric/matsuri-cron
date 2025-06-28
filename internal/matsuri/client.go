@@ -30,6 +30,11 @@ type MatsuriClient interface {
 		rankingBorder int,
 		options *models.EventRankingLogsOptions,
 	) ([]models.EventRankingLog, error)
+	GetEventIdolRankingLogs(
+		eventId int,
+		rankingBorder int,
+		options *models.EventRankingLogsOptions,
+	) (map[int][]models.EventRankingLog, error)
 }
 
 type MatsurihiMeClient struct {
@@ -156,6 +161,42 @@ func (m *MatsurihiMeClient) GetEventRankingLogs(
 	}
 
 	return eventRankingLogs, nil
+}
+
+func (m *MatsurihiMeClient) GetEventIdolRankingLogs(
+	eventId int,
+	rankingBorder int,
+	options *models.EventRankingLogsOptions,
+) (map[int][]models.EventRankingLog, error) {
+
+	rankingLogByIdolId := make(map[int][]models.EventRankingLog)
+
+	for idolId := 1; idolId <= 52; idolId++ {
+		url := m.baseUrl + "/events/" + strconv.Itoa(eventId) +
+			"/rankings/idolPoint/" + strconv.Itoa(idolId) +
+			"/logs/" + strconv.Itoa(rankingBorder)
+
+		params := make(map[string]string)
+		headers := make(map[string]string)
+
+		if options != nil {
+			if !options.Since.IsZero() {
+				params["since"] = options.Since.Format(time.RFC3339)
+			}
+			if len(options.IfNonMatch) > 0 {
+				headers["If-None-Match"] = options.IfNonMatch
+			}
+		}
+
+		var eventRankingLogs []models.EventRankingLog
+
+		if err := m.sendGetRequest(url, params, headers, &eventRankingLogs); err != nil {
+			return nil, err
+		}
+		rankingLogByIdolId[idolId] = eventRankingLogs
+	}
+
+	return rankingLogByIdolId, nil
 }
 
 func (m *MatsurihiMeClient) sendGetRequest(

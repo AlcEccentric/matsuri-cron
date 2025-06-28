@@ -12,6 +12,7 @@ import (
 )
 
 var SURPPORTED_BORDERS = []int{100, 2500}
+var ANN_SUPPORTED_BORDERS = []int{100, 1000}
 
 const (
 	SURPPORTED_BORDER_TYPE = models.EventPoint
@@ -25,19 +26,24 @@ func RunSync(client matsuri.MatsuriClient, dao dao.DAO) error {
 
 	events, err := client.GetEvents(&models.EventsOptions{
 		OrderBys: []models.EventSortType{models.IdAsc},
-		Types:    []models.EventType{models.Theater, models.Tour, models.Tune, models.Tale},
+		Types:    []models.EventType{models.Theater, models.Tour, models.Tune, models.Tale, models.Anniversary},
 	})
 	if err != nil {
 		return errors.New("get events: " + err.Error())
 	}
 	logrus.Infof("Got %d events before filtering", len(events))
 
-	eventInfos := collectEventInfos(client, events, latest.EventId, SURPPORTED_BORDERS)
+	eventInfos := collectEventInfos(client, events, latest.EventId)
 	if len(eventInfos) > 0 {
 		logrus.Infof("Got %d events to process", len(eventInfos))
 		if err := dao.SaveEventInfos(eventInfos); err != nil {
 			return errors.New("save event infos: " + err.Error())
 		}
+	}
+
+	eventIdToEventInfo := make(map[int]models.EventInfo)
+	for _, info := range eventInfos {
+		eventIdToEventInfo[info.EventId] = info
 	}
 
 	eventIds := make(map[int]struct{})
@@ -53,7 +59,7 @@ func RunSync(client matsuri.MatsuriClient, dao dao.DAO) error {
 		}
 	}
 
-	borderInfos := collectBorderInfos(client, eventIds, SURPPORTED_BORDERS, SURPPORTED_BORDER_TYPE)
+	borderInfos := collectBorderInfos(client, eventIds, eventIdToEventInfo)
 	if err := dao.SaveBorderInfos(borderInfos); err != nil {
 		return errors.New("save border infos: " + err.Error())
 	}
@@ -68,52 +74,82 @@ func RunSync(client matsuri.MatsuriClient, dao dao.DAO) error {
 func collectBorderInfos(
 	matsuriClient matsuri.MatsuriClient,
 	eventIds map[int]struct{},
-	supportedBorders []int,
-	supportedBorderType models.EventRankingType,
+	eventIdToEventInfo map[int]models.EventInfo,
 ) []models.BorderInfo {
 	var borderInfos []models.BorderInfo
 
 	for eventId := range eventIds {
-		for _, border := range supportedBorders {
-			logrus.Infof("Collecting border infos for event %d with border: %d", eventId, border)
-			rankingLogs, err := matsuriClient.GetEventRankingLogs(
-				eventId,
-				supportedBorderType,
-				border,
-				nil,
-			)
-			if err != nil {
-				logrus.Warnf("Failed to get ranking logs for event %d with border: %d : %s", eventId, border, err.Error())
-				continue
-			}
-
-			for _, log := range rankingLogs {
-				for _, data := range log.Data {
-					borderInfo := models.BorderInfo{
-						EventId:      eventId,
-						Border:       border,
-						RankingType:  supportedBorderType,
-						Score:        data.Score,
-						AggregatedAt: data.AggregatedAt,
-					}
-					borderInfos = append(borderInfos, borderInfo)
-				}
-			}
-			logCnt := 0
-			if len(rankingLogs) > 0 {
-				logCnt = len(rankingLogs[0].Data)
-			}
-			logrus.Infof("Collected %d border infos for event %d with border: %d", logCnt, eventId, border)
+		eventInfo := eventIdToEventInfo[eventId]
+		if eventInfo.EventType == models.Anniversary {
+			borderInfos = append(borderInfos, collectAnniversaryBorders(matsuriClient, eventId)...)
+		} else {
+			borderInfos = append(borderInfos, collectNormalBorders(matsuriClient, eventId)...)
 		}
 	}
 	return borderInfos
+}
+
+func collectAnniversaryBorders(client matsuri.MatsuriClient, eventId int) []models.BorderInfo {
+	var infos []models.BorderInfo
+	for _, border := range ANN_SUPPORTED_BORDERS {
+		logrus.Infof("Collecting border infos for anniversary event %d with border: %d", eventId, border)
+		idolRankingLogs, err := client.GetEventIdolRankingLogs(eventId, border, nil)
+		if err != nil {
+			logrus.Warnf("Failed to get ranking logs for event %d with border: %d : %s", eventId, border, err.Error())
+			continue
+		}
+		logCnt := 0
+		for idolId, rankingLogs := range idolRankingLogs {
+			for _, log := range rankingLogs {
+				logCnt += len(log.Data)
+				for _, data := range log.Data {
+					infos = append(infos, models.BorderInfo{
+						EventId:      eventId,
+						Border:       border,
+						IdolId:       idolId,
+						RankingType:  models.IdolPoint,
+						Score:        data.Score,
+						AggregatedAt: data.AggregatedAt,
+					})
+				}
+			}
+		}
+		logrus.Infof("Collected %d border infos for event %d with border: %d", logCnt, eventId, border)
+	}
+	return infos
+}
+
+func collectNormalBorders(client matsuri.MatsuriClient, eventId int) []models.BorderInfo {
+	var infos []models.BorderInfo
+	for _, border := range SURPPORTED_BORDERS {
+		logrus.Infof("Collecting border infos for normal event %d with border: %d", eventId, border)
+		rankingLogs, err := client.GetEventRankingLogs(eventId, SURPPORTED_BORDER_TYPE, border, nil)
+		if err != nil {
+			logrus.Warnf("Failed to get ranking logs for event %d with border: %d : %s", eventId, border, err.Error())
+			continue
+		}
+		logCnt := 0
+		for _, log := range rankingLogs {
+			logCnt += len(log.Data)
+			for _, data := range log.Data {
+				infos = append(infos, models.BorderInfo{
+					EventId:      eventId,
+					Border:       border,
+					RankingType:  SURPPORTED_BORDER_TYPE,
+					Score:        data.Score,
+					AggregatedAt: data.AggregatedAt,
+				})
+			}
+		}
+		logrus.Infof("Collected %d border infos for event %d with border: %d", logCnt, eventId, border)
+	}
+	return infos
 }
 
 func collectEventInfos(
 	matsuriClient matsuri.MatsuriClient,
 	events []models.Event,
 	maxEventId int,
-	supportedBorders []int,
 ) []models.EventInfo {
 	eventInfos := make([]models.EventInfo, 0)
 
@@ -128,8 +164,8 @@ func collectEventInfos(
 			continue
 		}
 
-		if utils.IsSubset(supportedBorders, borders.EventPoint) &&
-			models.EventType(event.Type) != models.Anniversary {
+		if isSupportedAnniversaryEvent(event, borders, ANN_SUPPORTED_BORDERS) ||
+			isSupportedNormalEvent(event, borders, SURPPORTED_BORDERS) {
 			eventInfo := models.EventInfo{
 				EventId:           event.Id,
 				EventType:         models.EventType(event.Type),
@@ -142,9 +178,35 @@ func collectEventInfos(
 			logrus.Infof("Collected info for event %d", event.Id)
 			eventInfos = append(eventInfos, eventInfo)
 		} else {
-			logrus.Infof("Skipped event %d with name: %s", event.Id, event.Name)
+			logrus.Infof("Event %d with type %d is not supported", event.Id, event.Type)
 		}
 	}
 
 	return eventInfos
+}
+
+func isSupportedNormalEvent(event models.Event, borders models.EventRankingBorders, supportedBorders []int) bool {
+	return models.EventType(event.Type) != models.Anniversary && utils.IsSubset(supportedBorders, borders.EventPoint)
+}
+
+func isSupportedAnniversaryEvent(event models.Event, borders models.EventRankingBorders, anniversarySupportedBorders []int) bool {
+	if models.EventType(event.Type) != models.Anniversary {
+		return false
+	}
+
+	if len(borders.IdolPoint) != 52 {
+		logrus.Fatalf("Event %d has %d idol points, expected 52", event.Id, len(borders.IdolPoint))
+	}
+
+	counter := 0
+	for _, idolPoint := range borders.IdolPoint {
+		if utils.IsSubset(anniversarySupportedBorders, idolPoint.Borders) {
+			counter++
+		}
+	}
+	if counter != 52 {
+		logrus.Fatalf("Event %d has %d idols with supported anniversary borders, expected 52", event.Id, counter)
+	}
+
+	return true
 }

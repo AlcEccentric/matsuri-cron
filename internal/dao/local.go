@@ -59,7 +59,7 @@ func (u *LocalDAO) SaveBorderInfos(borderInfos []models.BorderInfo) error {
 	borderInfosByBorderGroupKey := groupByEventIdAndBorder(borderInfos)
 	var err error
 	for key, infos := range borderInfosByBorderGroupKey {
-		filepath := path.Join(u.outputPath, u.borderInfoDir, fmt.Sprintf(BORDER_INFO_FILENAME_FORMAT, key.EventId, key.Border))
+		filepath := path.Join(u.outputPath, u.borderInfoDir, fmt.Sprintf(BORDER_INFO_FILENAME_FORMAT, key.EventId, key.IdolId, key.Border))
 		logrus.Infof("Saving %d border infos for event ID %d and border %d to %s", len(infos), key.EventId, key.Border, filepath)
 		err = multierr.Append(err, saveCSV(filepath, infos))
 	}

@@ -84,16 +84,16 @@ func TestSaveBorderInfos(t *testing.T) {
 	defer os.RemoveAll(tmp)
 	dao := NewLocalDAO(tmp, "b", "e", "m")
 	borderInfos := []models.BorderInfo{
-		{EventId: 1, Border: 100, Score: 10, AggregatedAt: time.Now()},
-		{EventId: 1, Border: 100, Score: 20, AggregatedAt: time.Now()},
-		{EventId: 2, Border: 2500, Score: 30, AggregatedAt: time.Now()},
+		{EventId: 1, IdolId: 0, Border: 100, Score: 10, AggregatedAt: time.Now()},
+		{EventId: 1, IdolId: 0, Border: 100, Score: 20, AggregatedAt: time.Now()},
+		{EventId: 2, IdolId: 0, Border: 2500, Score: 30, AggregatedAt: time.Now()},
 	}
 	err := dao.SaveBorderInfos(borderInfos)
 	assert.NoError(t, err)
 	// Check files exist
-	_, err = os.Stat(filepath.Join(tmp, "b", "border_info_1_100.csv"))
+	_, err = os.Stat(filepath.Join(tmp, "b", "border_info_1_0_100.csv"))
 	assert.True(t, os.IsNotExist(err) == false)
-	_, err = os.Stat(filepath.Join(tmp, "b", "border_info_2_2500.csv"))
+	_, err = os.Stat(filepath.Join(tmp, "b", "border_info_2_0_2500.csv"))
 	assert.True(t, os.IsNotExist(err) == false)
 }
 

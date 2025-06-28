@@ -207,3 +207,32 @@ func TestGetEventRankingLogs_WithOptions(t *testing.T) {
 	assert.Equal(t, expected[0].Rank, logs[0].Rank)
 	assert.Equal(t, expected[0].Data[0].Score, logs[0].Data[0].Score)
 }
+
+func TestGetEventIdolRankingLogs(t *testing.T) {
+	expected := map[int][]models.EventRankingLog{
+		1: {
+			{
+				Rank: 100,
+				Data: []struct {
+					Score        int       `json:"score"`
+					AggregatedAt time.Time `json:"aggregatedAt"`
+				}{
+					{Score: 12345, AggregatedAt: time.Now()},
+				},
+			},
+		},
+	}
+	handler := func(w http.ResponseWriter, r *http.Request) {
+		// Extract idolId from URL for test
+		idolId := 1
+		json.NewEncoder(w).Encode(expected[idolId])
+	}
+	server, client := setupTestServer(t, handler)
+	defer server.Close()
+
+	logs, err := client.GetEventIdolRankingLogs(1, 100, nil)
+	assert.NoError(t, err)
+	assert.Contains(t, logs, 1)
+	assert.Equal(t, expected[1][0].Rank, logs[1][0].Rank)
+	assert.Equal(t, expected[1][0].Data[0].Score, logs[1][0].Data[0].Score)
+}
