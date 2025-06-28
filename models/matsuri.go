@@ -139,14 +139,16 @@ type Event struct {
 	} `json:"item"`
 }
 
+type IdolPointBorders struct {
+	IdolId  int   `json:"idolId"`
+	Borders []int `json:"borders"`
+}
+
 type EventRankingBorders struct {
-	EventPoint  []int `json:"eventPoint"`
-	HighScore   []int `json:"highScore"`
-	LoungePoint []int `json:"loungePoint"`
-	IdolPoint   []struct {
-		IdolID  int   `json:"idolId"`
-		Borders []int `json:"borders"`
-	} `json:"idolPoint"`
+	EventPoint  []int              `json:"eventPoint"`
+	HighScore   []int              `json:"highScore"`
+	LoungePoint []int              `json:"loungePoint"`
+	IdolPoint   []IdolPointBorders `json:"idolPoint"`
 }
 
 type EventRankingLogsOptions struct {

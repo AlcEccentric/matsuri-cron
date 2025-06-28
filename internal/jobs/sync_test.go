@@ -6,6 +6,7 @@ import (
 	"time"
 
 	"github.com/alceccentric/matsurihi-cron/models"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -256,4 +257,126 @@ func TestCollectBorderInfos_HandlesGetEventRankingLogsError(t *testing.T) {
 	mockClient.On("GetEventRankingLogs", 1, models.EventPoint, 2500, (*models.EventRankingLogsOptions)(nil)).Return([]models.EventRankingLog{}, nil).Once()
 	infos := collectBorderInfos(mockClient, map[int]struct{}{1: struct{}{}}, map[int]models.EventInfo{1: models.EventInfo{EventId: 1}})
 	assert.Len(t, infos, 0)
+}
+
+func TestCollectAnniversaryBorders_Success(t *testing.T) {
+	mockClient := new(MockMatsuriClient)
+	eventId := 10
+	border := 100
+	now := time.Now()
+	mockClient.On("GetEventIdolRankingLogs", eventId, border, (*models.EventRankingLogsOptions)(nil)).
+		Return(map[int][]models.EventRankingLog{
+			1: {
+				{
+					Rank: 100,
+					Data: []struct {
+						Score        int       `json:"score"`
+						AggregatedAt time.Time `json:"aggregatedAt"`
+					}{
+						{Score: 123, AggregatedAt: now},
+					},
+				},
+			},
+		}, nil).Once()
+	// For the second border (1000), return empty
+	mockClient.On("GetEventIdolRankingLogs", eventId, 1000, (*models.EventRankingLogsOptions)(nil)).
+		Return(map[int][]models.EventRankingLog{}, nil).Once()
+
+	infos := collectAnniversaryBorders(mockClient, eventId)
+	assert.Len(t, infos, 1)
+	assert.Equal(t, eventId, infos[0].EventId)
+	assert.Equal(t, border, infos[0].Border)
+	assert.Equal(t, 1, infos[0].IdolId)
+	assert.Equal(t, 123, infos[0].Score)
+	assert.Equal(t, now, infos[0].AggregatedAt)
+}
+
+func TestCollectAnniversaryBorders_Error(t *testing.T) {
+	mockClient := new(MockMatsuriClient)
+	eventId := 10
+	// Simulate error for both borders
+	mockClient.On("GetEventIdolRankingLogs", eventId, 100, (*models.EventRankingLogsOptions)(nil)).
+		Return(map[int][]models.EventRankingLog{}, errors.New("fail")).Once()
+	mockClient.On("GetEventIdolRankingLogs", eventId, 1000, (*models.EventRankingLogsOptions)(nil)).
+		Return(map[int][]models.EventRankingLog{}, errors.New("fail")).Once()
+
+	infos := collectAnniversaryBorders(mockClient, eventId)
+	assert.Len(t, infos, 0)
+}
+
+func TestIsSupportedAnniversaryEvent_True(t *testing.T) {
+	event := models.Event{
+		Id:   1,
+		Type: int(models.Anniversary),
+	}
+	// 52 idol points, each with both supported borders
+	borders := models.EventRankingBorders{
+		IdolPoint: make([]models.IdolPointBorders, 52),
+	}
+	for i := 0; i < 52; i++ {
+		borders.IdolPoint[i] = models.IdolPointBorders{
+			IdolId:  i + 1,
+			Borders: []int{100, 1000},
+		}
+	}
+	assert.True(t, isSupportedAnniversaryEvent(event, borders, []int{100, 1000}))
+}
+
+func TestIsSupportedAnniversaryEvent_WrongType(t *testing.T) {
+	event := models.Event{
+		Id:   1,
+		Type: int(models.Theater),
+	}
+	borders := models.EventRankingBorders{}
+	assert.False(t, isSupportedAnniversaryEvent(event, borders, []int{100, 1000}))
+}
+
+func TestIsSupportedAnniversaryEvent_WrongIdolCount(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("Expected fatal for wrong idol count")
+		}
+	}()
+	// Set logrus to panic on Fatal
+	logrus.StandardLogger().ExitFunc = func(int) { panic("fatal called") }
+
+	event := models.Event{
+		Id:   1,
+		Type: int(models.Anniversary),
+	}
+	borders := models.EventRankingBorders{
+		IdolPoint: make([]models.IdolPointBorders, 51), // not 52
+	}
+	isSupportedAnniversaryEvent(event, borders, []int{100, 1000})
+}
+
+func TestIsSupportedAnniversaryEvent_WrongSupportedCount(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Errorf("Expected fatal for wrong supported idol count")
+		}
+	}()
+	// Set logrus to panic on Fatal
+	logrus.StandardLogger().ExitFunc = func(int) { panic("fatal called") }
+
+	event := models.Event{
+		Id:   1,
+		Type: int(models.Anniversary),
+	}
+	borders := models.EventRankingBorders{
+		IdolPoint: make([]models.IdolPointBorders, 52),
+	}
+	// Only 51 idols have the supported borders
+	for i := 0; i < 51; i++ {
+		borders.IdolPoint[i] = models.IdolPointBorders{
+			IdolId:  i + 1,
+			Borders: []int{100, 1000},
+		}
+	}
+	// The last idol does not have all supported borders
+	borders.IdolPoint[51] = models.IdolPointBorders{
+		IdolId:  52,
+		Borders: []int{100},
+	}
+	isSupportedAnniversaryEvent(event, borders, []int{100, 1000})
 }
