@@ -234,9 +234,9 @@ func TestCollectEventInfos_SkipOldAndAnniversary(t *testing.T) {
 		{Id: 1, Type: int(models.Anniversary), Name: "Anniv"},
 		{Id: 2, Type: int(models.Theater), Name: "Theater"},
 	}
-	// Make event 2 fail as well, so both are skipped
+	mockClient.On("GetEventRankingBorders", 1).Return(models.EventRankingBorders{}, errors.New("fail")).Once()
 	mockClient.On("GetEventRankingBorders", 2).Return(models.EventRankingBorders{}, errors.New("fail")).Once()
-	infos := collectEventInfos(mockClient, events, 1)
+	infos := collectEventInfos(mockClient, events)
 	assert.Len(t, infos, 0)
 }
 
@@ -246,7 +246,7 @@ func TestCollectEventInfos_HandlesGetEventRankingBordersError(t *testing.T) {
 		{Id: 2, Type: int(models.Theater), Name: "Theater"},
 	}
 	mockClient.On("GetEventRankingBorders", 2).Return(models.EventRankingBorders{}, errors.New("fail")).Once()
-	infos := collectEventInfos(mockClient, events, 1)
+	infos := collectEventInfos(mockClient, events)
 	assert.Len(t, infos, 0)
 }
 

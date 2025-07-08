@@ -80,7 +80,13 @@ func (u *R2DAO) SaveEventInfos(eventInfos []models.EventInfo) error {
 	key := path.Join(u.eventInfoPrefix, EVENT_INFO_FILENAME)
 	logrus.Infof("Saving %d event infos to bucket: %s with key: %s",
 		len(eventInfos), u.bucketName, key)
-	return writeCSVToR2(u.s3, u.bucketName, key, eventInfos)
+	if err := writeCSVToR2(u.s3, u.bucketName, key, eventInfos); err != nil {
+		return err
+	} else {
+		logrus.Infof("Successfully saved %d event infos to bucket: %s with key: %s", len(eventInfos), u.bucketName, key)
+		return nil
+	}
+
 }
 
 func (u *R2DAO) SaveBorderInfos(borderInfos []models.BorderInfo) error {
@@ -90,14 +96,25 @@ func (u *R2DAO) SaveBorderInfos(borderInfos []models.BorderInfo) error {
 		key := path.Join(u.borderInfoPrefix, fmt.Sprintf(BORDER_INFO_FILENAME_FORMAT, group.EventId, group.IdolId, group.Border))
 		err = multierr.Append(err, writeCSVToR2(u.s3, u.bucketName, key, infos))
 	}
-	return err
+	if err != nil {
+		return err
+	} else {
+		logrus.Infof("Successfully saved %d border infos to bucket: %s", len(borderInfos), u.bucketName)
+		return nil
+	}
 }
 
 func (u *R2DAO) SaveLatestEventInfo(info models.EventInfo) error {
 	// Always replace event info file completely
 	key := path.Join(u.metadataInfoPrefix, LATEST_EVENT_BORDER_INFO_FILE)
 	logrus.Infof("Saving latest event info %v to bucket: %s with key: %s", info, u.bucketName, key)
-	return writeJsonToR2(u.s3, u.bucketName, key, info)
+	err := writeJsonToR2(u.s3, u.bucketName, key, info)
+	if err != nil {
+		return err
+	} else {
+		logrus.Infof("Successfully saved latest event info %v to bucket: %s with key: %s", info, u.bucketName, key)
+		return nil
+	}
 }
 
 func initS3Client() *s3.Client {

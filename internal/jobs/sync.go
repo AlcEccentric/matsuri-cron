@@ -33,12 +33,14 @@ func RunSync(client matsuri.MatsuriClient, dao dao.DAO) error {
 	}
 	logrus.Infof("Got %d events before filtering", len(events))
 
-	eventInfos := collectEventInfos(client, events, latest.EventId)
+	eventInfos := collectEventInfos(client, events)
 	if len(eventInfos) > 0 {
 		logrus.Infof("Got %d events to process", len(eventInfos))
 		if err := dao.SaveEventInfos(eventInfos); err != nil {
 			return errors.New("save event infos: " + err.Error())
 		}
+	} else {
+		logrus.Fatalln("No events to process")
 	}
 
 	eventIdToEventInfo := make(map[int]models.EventInfo)
@@ -46,20 +48,18 @@ func RunSync(client matsuri.MatsuriClient, dao dao.DAO) error {
 		eventIdToEventInfo[info.EventId] = info
 	}
 
-	eventIds := make(map[int]struct{})
-	if latest.EventId > 0 {
-		// Although eventInfos only contains events with IDs greater than latest.EventId,
-		// we still wanna fetch border infos for the last latest event
-		eventIds[latest.EventId] = struct{}{}
-	}
+	eventIdsToFetchBorderInfo := make(map[int]struct{})
 	for _, info := range eventInfos {
-		eventIds[info.EventId] = struct{}{}
+		if latest.EventId > 0 && info.EventId < latest.EventId {
+			continue
+		}
+		eventIdsToFetchBorderInfo[info.EventId] = struct{}{}
 		if info.EventId > latest.EventId {
 			latest = info
 		}
 	}
 
-	borderInfos := collectBorderInfos(client, eventIds, eventIdToEventInfo)
+	borderInfos := collectBorderInfos(client, eventIdsToFetchBorderInfo, eventIdToEventInfo)
 	if err := dao.SaveBorderInfos(borderInfos); err != nil {
 		return errors.New("save border infos: " + err.Error())
 	}
@@ -149,14 +149,10 @@ func collectNormalBorders(client matsuri.MatsuriClient, eventId int) []models.Bo
 func collectEventInfos(
 	matsuriClient matsuri.MatsuriClient,
 	events []models.Event,
-	maxEventId int,
 ) []models.EventInfo {
 	eventInfos := make([]models.EventInfo, 0)
 
 	for _, event := range events {
-		if event.Id <= maxEventId {
-			continue
-		}
 
 		borders, err := matsuriClient.GetEventRankingBorders(event.Id)
 		if err != nil {
